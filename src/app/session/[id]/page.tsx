@@ -58,9 +58,8 @@ export default async function SessionPage({
               </p>
             )}
             <p className="mt-2 text-sm text-slate-500">
-              {s.require_password ? "🔒 암호 필요 · " : "🔓 누구나 가능 · "}
-              제출 {submittedCount}/{roster.length}명 · 본인 이름을 눌러 결과물을
-              올리세요.
+              제출 {submittedCount}/{roster.length}명 · 암호 없이 본인 이름
+              박스를 누르면 바로 올릴 수 있습니다.
             </p>
           </div>
           {!s.is_open && (

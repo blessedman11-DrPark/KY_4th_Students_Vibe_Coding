@@ -3,19 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseServer, BUCKET } from "./supabase";
-import {
-  setAdmin,
-  logoutAdmin,
-  isAdmin,
-  authorizedForStudent,
-  unlockStudentCookie,
-  setMasterUnlock,
-  isFreepass,
-  clearStudentUnlock,
-} from "./auth";
-import { getSettings, setSetting, verifyAdminPassword } from "./settings";
+import { setAdmin, logoutAdmin, isAdmin } from "./auth";
+import { setSetting, verifyAdminPassword } from "./settings";
 
 // ── 학생: 글 작성 ─────────────────────────────────────────
+// 암호 없이 누구나 본인 이름 박스를 눌러 바로 제출할 수 있다.
 export async function createPost(formData: FormData) {
   const sb = supabaseServer();
 
@@ -27,16 +19,6 @@ export async function createPost(formData: FormData) {
 
   if (!session_id || !title) {
     throw new Error("회차와 제목은 필수입니다.");
-  }
-
-  // 접근 권한 확인 (암호 필요 회차면 본인/마스터 암호 인증 또는 교수)
-  const { data: sess } = await sb
-    .from("sessions")
-    .select("require_password")
-    .eq("id", session_id)
-    .single();
-  if (!(await authorizedForStudent(sess?.require_password ?? true, student_id))) {
-    redirect(`/session/${session_id}/student/${student_id}`);
   }
 
   // 한 학생당 한 회차에 하나만 제출 (중복 제출 방지)
@@ -61,14 +43,6 @@ export async function createPost(formData: FormData) {
   if (error) throw new Error(error.message);
 
   await uploadFiles(sb, formData, session_id, post.id);
-
-  // 프리패스가 아니면 인증 소진(다음엔 다시 암호) → 회차 명단으로 이동
-  const requirePw = sess?.require_password ?? true;
-  if (requirePw && !(await isFreepass())) {
-    await clearStudentUnlock();
-    revalidatePath(`/session/${session_id}`);
-    redirect(`/session/${session_id}`);
-  }
 
   revalidatePath(`/session/${session_id}`);
   if (student_id) {
@@ -121,17 +95,6 @@ export async function updatePost(formData: FormData) {
 
   if (!post_id || !title) throw new Error("제목은 필수입니다.");
 
-  const { data: sess } = await sb
-    .from("sessions")
-    .select("require_password")
-    .eq("id", session_id)
-    .single();
-  if (
-    !(await authorizedForStudent(sess?.require_password ?? true, student_id || null))
-  ) {
-    redirect(`/session/${session_id}/student/${student_id}`);
-  }
-
   const { error } = await sb
     .from("posts")
     .update({ title, content, link_url, updated_at: new Date().toISOString() })
@@ -155,13 +118,6 @@ export async function updatePost(formData: FormData) {
   // 새 파일 추가 업로드
   await uploadFiles(sb, formData, session_id, post_id);
 
-  const requirePw = sess?.require_password ?? true;
-  if (requirePw && !(await isFreepass())) {
-    await clearStudentUnlock();
-    revalidatePath(`/session/${session_id}`);
-    redirect(`/session/${session_id}`);
-  }
-
   revalidatePath(`/session/${session_id}/student/${student_id}`);
   redirect(`/session/${session_id}/student/${student_id}`);
 }
@@ -174,17 +130,6 @@ export async function deletePost(formData: FormData) {
   const student_id = String(formData.get("student_id") || "");
   if (!post_id) return;
 
-  const { data: sess } = await sb
-    .from("sessions")
-    .select("require_password")
-    .eq("id", session_id)
-    .single();
-  if (
-    !(await authorizedForStudent(sess?.require_password ?? true, student_id || null))
-  ) {
-    redirect(`/session/${session_id}/student/${student_id}`);
-  }
-
   const { data: atts } = await sb
     .from("attachments")
     .select("file_path")
@@ -193,13 +138,6 @@ export async function deletePost(formData: FormData) {
   if (paths.length > 0) await sb.storage.from(BUCKET).remove(paths);
 
   await sb.from("posts").delete().eq("id", post_id);
-
-  const requirePw = sess?.require_password ?? true;
-  if (requirePw && !(await isFreepass())) {
-    await clearStudentUnlock();
-    revalidatePath(`/session/${session_id}`);
-    redirect(`/session/${session_id}`);
-  }
 
   revalidatePath(`/session/${session_id}`);
   revalidatePath(`/session/${session_id}/student/${student_id}`);
@@ -224,7 +162,7 @@ async function assertAdmin() {
 }
 
 // ── 관리자: 학생 명단 저장 (텍스트 일괄 입력) ─────────────
-// 입력 형식: 한 줄에 "학번, 성명, 암호" (암호는 선택)
+// 입력 형식: 한 줄에 "학번, 성명"
 export async function saveStudentsAction(formData: FormData) {
   await assertAdmin();
   const sb = supabaseServer();
@@ -239,16 +177,13 @@ export async function saveStudentsAction(formData: FormData) {
       return {
         student_no: parts[0] || "",
         name: parts[1] || parts[0] || "",
-        password: parts[2] || null,
         sort_order: i,
       };
     })
     .filter((r) => r.name);
 
   // 학번(student_no) 기준 병합 저장 → 기존 학생 ID를 유지해 제출물 연결을 보존
-  const { data: existing } = await sb
-    .from("students")
-    .select("id, student_no");
+  const { data: existing } = await sb.from("students").select("id, student_no");
   const idByNo = new Map(
     (existing ?? []).map((s) => [s.student_no, s.id as string])
   );
@@ -268,11 +203,7 @@ export async function saveStudentsAction(formData: FormData) {
     if (id) {
       await sb
         .from("students")
-        .update({
-          name: r.name,
-          password: r.password,
-          sort_order: r.sort_order,
-        })
+        .update({ name: r.name, sort_order: r.sort_order })
         .eq("id", id);
     } else {
       const { error } = await sb.from("students").insert(r);
@@ -293,14 +224,11 @@ export async function addSessionAction(formData: FormData) {
   const title = String(formData.get("title") || "").trim();
   const lesson_date = String(formData.get("lesson_date") || "") || null;
   const description = String(formData.get("description") || "").trim() || null;
-  // 접근 방식: "yes"(암호 필요) / "no"(누구나 가능)
-  const require_password =
-    String(formData.get("require_password") || "yes") === "yes";
   if (!title) throw new Error("회차 제목은 필수입니다.");
 
   const { error } = await sb
     .from("sessions")
-    .insert({ week, title, lesson_date, description, require_password });
+    .insert({ week, title, lesson_date, description });
   if (error) throw new Error(error.message);
 
   revalidatePath("/admin");
@@ -317,6 +245,18 @@ export async function deleteSessionAction(formData: FormData) {
   revalidatePath("/");
 }
 
+// ── 관리자: 회차 제출 열기/마감 전환 ──────────────────────
+export async function toggleSessionOpenAction(formData: FormData) {
+  await assertAdmin();
+  const sb = supabaseServer();
+  const id = String(formData.get("id") || "");
+  const is_open = String(formData.get("is_open") || "") === "true";
+  await sb.from("sessions").update({ is_open }).eq("id", id);
+  revalidatePath("/admin");
+  revalidatePath("/");
+  revalidatePath(`/session/${id}`);
+}
+
 // ── 관리자: 게시글 삭제 ───────────────────────────────────
 export async function deletePostAction(formData: FormData) {
   await assertAdmin();
@@ -328,39 +268,16 @@ export async function deletePostAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
-// ── 관리자: 암호 설정 저장 (마스터 암호 + 교수 암호 2개) ────
+// ── 관리자: 교수 로그인 암호 저장 (2개) ────────────────────
 export async function saveSettingsAction(formData: FormData) {
   await assertAdmin();
-  await setSetting("master_password", String(formData.get("master_password") || "").trim());
-  await setSetting("admin_password_1", String(formData.get("admin_password_1") || "").trim());
-  await setSetting("admin_password_2", String(formData.get("admin_password_2") || "").trim());
+  await setSetting(
+    "admin_password_1",
+    String(formData.get("admin_password_1") || "").trim()
+  );
+  await setSetting(
+    "admin_password_2",
+    String(formData.get("admin_password_2") || "").trim()
+  );
   revalidatePath("/admin");
-}
-
-// ── 학생: 이름 클릭 시 암호 인증 ──────────────────────────
-export async function studentUnlockAction(formData: FormData) {
-  const sb = supabaseServer();
-  const session_id = String(formData.get("session_id") || "");
-  const student_id = String(formData.get("student_id") || "");
-  const password = String(formData.get("password") || "");
-  const persist = !!formData.get("freepass"); // 체크 시 12시간 프리패스
-  const base = `/session/${session_id}/student/${student_id}`;
-  if (!student_id || !password) redirect(`${base}?error=1`);
-
-  const { data: st } = await sb
-    .from("students")
-    .select("password")
-    .eq("id", student_id)
-    .single();
-  const settings = await getSettings();
-
-  if (st?.password && password === st.password) {
-    await unlockStudentCookie(student_id, persist);
-    redirect(base);
-  }
-  if (settings.master_password && password === settings.master_password) {
-    await setMasterUnlock(persist);
-    redirect(base);
-  }
-  redirect(`${base}?error=1`);
 }

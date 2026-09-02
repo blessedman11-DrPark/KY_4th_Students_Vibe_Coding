@@ -60,7 +60,7 @@ export default async function Home() {
         <div>
           <h1 className="text-2xl font-bold">수업 회차</h1>
           <p className="text-sm text-slate-500">
-            수강생 {studentCount}명 · 회차를 눌러 결과물을 제출하세요.
+            수강생 {studentCount}명 · 회차를 눌러 결과물을 제출하세요. (암호 없이 누구나 가능)
           </p>
         </div>
       </div>

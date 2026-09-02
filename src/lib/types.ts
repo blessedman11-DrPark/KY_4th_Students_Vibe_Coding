@@ -2,7 +2,6 @@ export type Student = {
   id: string;
   student_no: string;
   name: string;
-  password: string | null;
   sort_order: number;
   created_at: string;
 };
@@ -14,7 +13,6 @@ export type Session = {
   lesson_date: string | null;
   description: string | null;
   is_open: boolean;
-  require_password: boolean;
   created_at: string;
 };
 

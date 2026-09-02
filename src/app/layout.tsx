@@ -3,7 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "디지털기술입문 제출 게시판",
+  title: "군사실무VIII 바이브코딩 제출 게시판",
   description: "수업 결과물 제출 게시판",
 };
 
@@ -18,7 +18,7 @@ export default function RootLayout({
         <header className="border-b bg-white">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
             <Link href="/" className="text-lg font-bold">
-              📋 디지털기술입문 제출 게시판
+              📋 군사실무VIII 바이브코딩 제출 게시판
             </Link>
             <Link
               href="/admin"
@@ -32,7 +32,7 @@ export default function RootLayout({
           {children}
         </main>
         <footer className="mx-auto w-full max-w-5xl px-4 py-8 text-center text-xs text-slate-400">
-          건양대학교 · 디지털기술입문 · made by Prof. Park
+          건양대학교 · 군사실무VIII 바이브코딩 · made by Prof. Park
         </footer>
       </body>
     </html>

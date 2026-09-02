@@ -1,12 +1,15 @@
 -- ============================================================
--- 디지털기술입문 학생 제출 게시판 - Supabase 스키마
+-- 군사실무VIII 바이브코딩 학생 제출 게시판 - Supabase 스키마
+-- (신규 설치용 전체 스키마)
 -- Supabase 대시보드 > SQL Editor 에 붙여넣고 실행하세요.
+-- ※ 이미 운영 중인 DB라면 migration-open-access.sql 을 실행하세요.
 -- ============================================================
 
 -- 확장 (UUID 생성용)
 create extension if not exists "pgcrypto";
 
 -- 학생 명단 -------------------------------------------------
+-- 학생 암호는 사용하지 않습니다(누구나 본인 이름 박스를 눌러 제출).
 create table if not exists public.students (
   id          uuid primary key default gen_random_uuid(),
   student_no  text not null,                 -- 학번
@@ -19,7 +22,7 @@ create table if not exists public.students (
 create table if not exists public.sessions (
   id          uuid primary key default gen_random_uuid(),
   week        int,                           -- 주차/차시
-  title       text not null,                 -- 예: "3주차 - HTML 실습"
+  title       text not null,                 -- 예: "3주차 - 바이브코딩 실습"
   lesson_date date,                          -- 수업 일자
   description text,                          -- 과제 설명
   is_open     boolean default true,          -- 제출 가능 여부
@@ -48,14 +51,21 @@ create table if not exists public.attachments (
   created_at  timestamptz default now()
 );
 
+-- 앱 전역 설정 (교수 로그인 암호 2개) ----------------------
+create table if not exists public.app_settings (
+  key   text primary key,
+  value text
+);
+
 create index if not exists idx_posts_session on public.posts(session_id);
 create index if not exists idx_attachments_post on public.attachments(post_id);
 
 -- RLS: 모든 접근은 서버(서비스 키)에서만 → 테이블 잠금 --------
-alter table public.students    enable row level security;
-alter table public.sessions    enable row level security;
-alter table public.posts       enable row level security;
-alter table public.attachments enable row level security;
+alter table public.students     enable row level security;
+alter table public.sessions     enable row level security;
+alter table public.posts        enable row level security;
+alter table public.attachments  enable row level security;
+alter table public.app_settings enable row level security;
 -- (정책을 만들지 않음 → anon/public 키로는 접근 불가, service_role 키만 통과)
 
 -- Storage 버킷 (공개 읽기) ---------------------------------

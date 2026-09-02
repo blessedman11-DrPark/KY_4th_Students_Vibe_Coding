@@ -1,13 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseServer, publicFileUrl } from "@/lib/supabase";
-import { isStudentUnlocked } from "@/lib/auth";
-import {
-  createPost,
-  updatePost,
-  deletePost,
-  studentUnlockAction,
-} from "@/lib/actions";
+import { createPost, updatePost, deletePost } from "@/lib/actions";
 import FileUploader from "@/components/FileUploader";
 import type { Post, Session, Student } from "@/lib/types";
 
@@ -50,10 +44,10 @@ export default async function StudentSubmitPage({
   searchParams,
 }: {
   params: Promise<{ id: string; studentId: string }>;
-  searchParams: Promise<{ edit?: string; error?: string }>;
+  searchParams: Promise<{ edit?: string }>;
 }) {
   const { id, studentId } = await params;
-  const { edit, error } = await searchParams;
+  const { edit } = await searchParams;
   const sb = supabaseServer();
 
   const [{ data: session }, { data: student }, { data: posts }] =
@@ -75,69 +69,6 @@ export default async function StudentSubmitPage({
   const hasPost = list.length > 0;
 
   const editingPost = edit ? list.find((p) => p.id === edit) : undefined;
-
-  // 접근 권한: 암호불필요 회차 / 본인·마스터 암호 인증
-  // (교수 로그인 상태여도 학생 게시판은 암호를 요구 — 마스터 암호로 통과 가능)
-  const authorized = !s.require_password || (await isStudentUnlocked(st.id));
-
-  const homeButton = (
-    <Link
-      href="/"
-      className="inline-flex w-fit items-center gap-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-    >
-      📋 주차 목록으로 돌아가기
-    </Link>
-  );
-
-  // ── 암호 확인 화면 (암호 필요 회차 & 미인증) ──────────────
-  if (!authorized) {
-    return (
-      <div className="mx-auto max-w-md space-y-5">
-        <div>
-          {homeButton}
-          <h1 className="mt-3 text-2xl font-bold">{st.name}</h1>
-          <p className="text-sm text-slate-400">{st.student_no}</p>
-        </div>
-        {error && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-            암호가 올바르지 않습니다.
-          </p>
-        )}
-        <form
-          action={studentUnlockAction}
-          className="space-y-3 rounded-xl border bg-white p-6 shadow-sm"
-        >
-          <input type="hidden" name="session_id" value={s.id} />
-          <input type="hidden" name="student_id" value={st.id} />
-          <label className="block text-sm font-medium">
-            🔒 암호를 입력하세요
-          </label>
-          <input
-            name="password"
-            type="text"
-            required
-            autoFocus
-            autoComplete="off"
-            placeholder="본인 암호 또는 마스터 암호"
-            className="w-full rounded-lg border px-3 py-2"
-          />
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" name="freepass" />
-            이 기기에서 12시간 동안 다시 묻지 않기 (프리패스)
-          </label>
-          <button className="w-full rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700">
-            확인
-          </button>
-        </form>
-        <Link
-          href={`/session/${s.id}`}
-          className="block text-center text-sm text-slate-500 hover:underline"
-        >
-          ← 명단으로
-        </Link>
-      </div>
-    );
-  }
 
   const backLink = (
     <Link
@@ -256,6 +187,7 @@ export default async function StudentSubmitPage({
         </Link>
         <h1 className="mt-3 text-2xl font-bold">{st.name}</h1>
         <p className="text-sm text-slate-400">{st.student_no}</p>
+        <div className="mt-2">{backLink}</div>
       </div>
 
       {hasPost ? (
@@ -327,7 +259,7 @@ export default async function StudentSubmitPage({
             <input
               name="title"
               required
-              placeholder="예: HTML 실습 결과"
+              placeholder="예: 바이브코딩 실습 결과"
               className="w-full rounded-lg border px-3 py-2"
             />
           </div>
